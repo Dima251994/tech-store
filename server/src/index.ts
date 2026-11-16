@@ -1,6 +1,7 @@
 import express from "express";
 import productsRouter from "./routes/productsRouter.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import "./config/database.js";
 
 const app = express();
 

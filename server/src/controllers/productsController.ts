@@ -1,18 +1,29 @@
 import type { Request, Response, NextFunction } from "express";
-import products from "../data/products.js";
 import { AppError } from "../utils/AppError.js";
+import { pool } from "../config/database.js";
 
-export const getAllProducts = (req: Request, res: Response) => {
-  res.json(products);
+export const getAllProducts = async (req: Request, res: Response) => {
+  const result = await pool.query("SELECT * FROM products");
+  res.json(result.rows);
 };
 
-export const getProductById = (
+export const getProductById = async (
   req: Request<{ id: string }>,
   res: Response,
   next: NextFunction,
 ) => {
   const productId = Number(req.params.id);
-  const product = products.find((item) => item.id === productId);
+
+  // Перевірка на валідність ID, щоб уникнути помилки в Postgres (invalid input syntax for type integer)
+  if (isNaN(productId)) {
+    return next(new AppError(400, "Invalid product ID"));
+  }
+
+  const result = await pool.query("SELECT * FROM products WHERE id = $1", [
+    productId,
+  ]);
+
+  const product = result.rows[0];
 
   if (!product) {
     next(new AppError(404, "Product not found"));
@@ -27,7 +38,7 @@ interface CreateProductBody {
   price: number;
 }
 
-export const createProduct = (
+export const createProduct = async (
   req: Request<{}, {}, CreateProductBody>,
   res: Response,
 ) => {
@@ -45,15 +56,18 @@ export const createProduct = (
     });
   }
 
-  const newProduct = {
-    id: products.length + 1,
-    name: name.trim(),
-    price: price,
-  };
+  const query = `
+      INSERT INTO products (name, price)
+      VALUES ($1, $2)
+      RETURNING *
+    `;
 
-  products.push(newProduct);
+  const values = [name.trim(), price];
 
-  res.status(201).json(newProduct);
+  const result = await pool.query(query, values);
+  const newProduct = result.rows[0];
+
+  return res.status(201).json(newProduct);
 };
 
 interface UpdateProductBody {
@@ -61,21 +75,16 @@ interface UpdateProductBody {
   price?: number;
 }
 
-export const updateProduct = (
+export const updateProduct = async (
   req: Request<{ id: string }, {}, UpdateProductBody>,
   res: Response,
 ) => {
   const productId = Number(req.params.id);
-  const product = products.find((item) => item.id === productId);
-
-  if (!product) {
-    res.status(404).json({
-      message: "Product not found",
-    });
-    return;
-  }
 
   const { name, price } = req.body;
+
+  const updates: string[] = [];
+  const values: (string | number)[] = [];
 
   if (name !== undefined) {
     if (typeof name !== "string" || name.trim() === "") {
@@ -83,7 +92,8 @@ export const updateProduct = (
         error: "Поле 'name' є обов'язковим і має бути не порожнім рядком.",
       });
     }
-    product.name = name.trim();
+    updates.push(`name = $${values.length + 1}`);
+    values.push(name.trim());
   }
 
   if (price !== undefined) {
@@ -92,24 +102,61 @@ export const updateProduct = (
         error: "Поле 'price' має бути числом і більшим за нуль.",
       });
     }
-    product.price = price;
+    updates.push(`price = $${values.length + 1}`);
+    values.push(price);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({
+      error: "Не передано жодного поля для оновлення.",
+    });
+  }
+
+  values.push(productId);
+  const setClause = updates.join(", ");
+
+  const query = `
+  UPDATE products
+  SET ${setClause}
+  WHERE id = $${values.length}
+  RETURNING *
+`;
+
+  const result = await pool.query(query, values);
+
+  const updatedProduct = result.rows[0];
+
+  if (!updatedProduct) {
+    return res.status(404).json({
+      message: "Product not found",
+    });
   }
 
   res.status(200).json({
     message: "Product updated successfully",
-    product,
+    product: updatedProduct,
   });
 };
 
-export const deleteProduct = (req: Request<{ id: string }>, res: Response) => {
+export const deleteProduct = async (
+  req: Request<{ id: string }>,
+  res: Response,
+) => {
   const productId = Number(req.params.id);
-  const productIndex = products.findIndex((item) => item.id === productId);
 
-  if (productIndex === -1) {
-    return res.status(404).json({ message: "Product not found" });
+  const query = `
+  DELETE FROM products
+  WHERE id = $1
+  RETURNING *;`;
+
+  const result = await pool.query(query, [productId]);
+  const product = result.rows[0];
+
+  if (!product) {
+    return res.status(404).json({
+      message: "Product not found",
+    });
   }
-
-  products.splice(productIndex, 1);
 
   res.status(200).json({
     message: "Product deleted successfully",
