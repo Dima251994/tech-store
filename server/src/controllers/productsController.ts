@@ -3,8 +3,27 @@ import { AppError } from "../utils/AppError.js";
 import { pool } from "../config/database.js";
 
 export const getAllProducts = async (req: Request, res: Response) => {
-  const result = await pool.query("SELECT * FROM products");
-  res.json(result.rows);
+  const query = `
+  SELECT
+  id,
+  name,
+  price,
+  description,
+  category,
+  image,
+  in_stock AS "inStock",
+  stock_quantity AS "stockQuantity",
+  specifications
+  FROM products`;
+
+  const result = await pool.query(query);
+
+  const products = result.rows.map((product) => ({
+    ...product,
+    price: Number(product.price),
+  }));
+
+  res.json(products);
 };
 
 export const getProductById = async (
@@ -19,9 +38,20 @@ export const getProductById = async (
     return next(new AppError(400, "Invalid product ID"));
   }
 
-  const result = await pool.query("SELECT * FROM products WHERE id = $1", [
-    productId,
-  ]);
+  const query = `SELECT
+  id,
+  name,
+  price,
+  description,
+  category,
+  image,
+  in_stock AS "inStock",
+  stock_quantity AS "stockQuantity",
+  specifications
+  FROM products
+  WHERE id = $1`;
+
+  const result = await pool.query(query, [productId]);
 
   const product = result.rows[0];
 

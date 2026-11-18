@@ -1,11 +1,55 @@
 import { Link, useParams } from "react-router-dom";
-import products from "../../data/products";
+import { useEffect, useState } from "react";
+import type { Product } from "../../types/product";
 import "./ProductPage.css";
 
 function ProductPage() {
   const { id } = useParams();
 
-  const product = products.find((product) => product.id === Number(id));
+  const [product, setProduct] = useState<Product | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchProduct = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const response = await fetch(
+          `http://localhost:5000/api/products/${id}`,
+        );
+
+        if (response.status === 404) {
+          setProduct(null);
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error("Помилка при завантаженні товару");
+        }
+
+        const data: Product = await response.json();
+        setProduct(data);
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Сталася помилка");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [id]);
+
+  if (isLoading) {
+    return <p>Завантаження товару...</p>;
+  }
+
+  if (error) {
+    return <p>{error}</p>;
+  }
 
   if (!product) {
     return <p>Товар не знайдено</p>;

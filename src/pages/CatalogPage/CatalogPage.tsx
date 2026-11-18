@@ -1,15 +1,41 @@
 import ProductCard from "../../components/ProductCard/ProductCard";
-import products from "../../data/products";
+import type { Product } from "../../types/product";
 import "./CatalogPage.css";
 import categories from "../../data/categories";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function CatalogPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [minPrice, setMinPrice] = useState<number | null>(null);
   const [maxPrice, setMaxPrice] = useState<number | null>(null);
   const [sortOption, setSortOption] = useState<string>("default");
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch("http://localhost:5000/api/products");
+
+        if (!response.ok) {
+          throw new Error("Не вдалося завантажити товари");
+        }
+
+        const data: Product[] = await response.json();
+        setProducts(data);
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Сталася помилка");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   const filteredProducts = products
     .filter(
@@ -52,6 +78,9 @@ function CatalogPage() {
     setSelectedCategory(category);
     console.log(`Selected category: ${category}`);
   };
+
+  if (isLoading) return <p>Завантаження товарів...</p>;
+  if (error) return <p>Помилка: {error}</p>;
 
   return (
     <main className="main-content">

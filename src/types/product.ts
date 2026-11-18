@@ -7,5 +7,5 @@ export type Product = {
   image: string;
   inStock: boolean;
   stockQuantity: number;
-  specifications?: Record<string, string>;
+  specifications?: Record<string, string> | null;
 };

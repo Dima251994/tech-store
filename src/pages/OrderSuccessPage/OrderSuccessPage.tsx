@@ -5,7 +5,6 @@ import "./OrderSuccessPage..css";
 function OrderSuccessPage() {
   const location = useLocation();
   const order = location.state?.order;
-  console.log(order);
 
   if (!order) {
     return <p>Дані замовлення не знайдено.</p>;
